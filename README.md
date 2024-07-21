@@ -8,7 +8,7 @@ This script is simply a stripped down and easier to install imitation of `mpv-su
 1. Download the latest version of the script from the [releases section](https://github.com/ZXY101/mpv-jimaku/releases/) and add it to your [scripts folder](https://mpv.io/manual/master/#script-location).
 2. If you haven't already, create an account on [Jimaku](https://jimaku.cc/login).
 3. Go to the [account page](https://jimaku.cc/account) and click the `Generate` button to create a new API key.
-4. Copy the API key and replace `YOUR_API_KEY_HERE` in the script with your API key.
+4. Copy the API key and replace `YOUR_API_KEY_GOES_HERE` in the script with your API key.
 
 ### Limitations
 - The script relies on `curl` to make the requests, it should be pre-installed on most devices but if the script does not work make sure you have [curl](https://curl.se/) installed.
