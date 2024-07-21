@@ -3,6 +3,9 @@
 // Click the `Copy` button and paste it below
 var API_KEY = 'YOUR_API_KEY_GOES_HERE';
 
+// Filter the response to only have the specified episode
+var PROMPT_EPISODE = false;
+
 // Keybindings
 var MANUAL_SEARCH_KEY = 'g';
 var AUTO_SEARCH_KEY = 'h';
@@ -96,28 +99,26 @@ function sanitize(text) {
   return result;
 }
 
-// Taken from mpv-subversive
+// Adapted from mpv-subversive
 // https://github.com/nairyosangha/mpv-subversive/blob/master/backend/backend.lua#L164
-function extractTitleAndNumber(text) {
+function extractTitle(text) {
   var matchers = [
-    { regex: /^([\w\s\d]+)[Ss](\d+)[Ee]?(\d+)/, groups: [1, 2] },
-    { regex: /^([\w\s\d]+)-[\s]*(\d+)[\s]*[^\w]*$/, groups: [1, 2] },
-    { regex: /^([\w\s\d]+)[Ee]?[Pp]?[\s]+(\d+)$/, groups: [1, 2] },
-    { regex: /^([\w\s\d]+)[\s](\d+).*$/, groups: [1, 2] },
-    { regex: /^(\d+)[\s]*(.+)$/, groups: [2, 1] },
+    { regex: /^([\w\s\d]+)[Ss]\d+[Ee]?\d+/, group: 1 },
+    { regex: /^([\w\s\d]+)-[\s]*\d+[\s]*[^\w]*$/, group: 1 },
+    { regex: /^([\w\s\d]+)[Ee]?[Pp]?[\s]+\d+$/, group: 1 },
+    { regex: /^([\w\s\d]+)[\s]\d+.*$/, group: 1 },
+    { regex: /^\d+[\s]*(.+)$/, group: 1 },
   ];
 
   for (var i = 0; i < matchers.length; i++) {
     var matcher = matchers[i];
     var match = text.match(matcher.regex);
     if (match) {
-      var title = match[matcher.groups[0]].trim();
-      var episode = parseInt(match[matcher.groups[1]], 10);
-      return { title: title, episode: episode };
+      return match[matcher.group].trim();
     }
   }
 
-  return { title: text, episode: null };
+  return text;
 }
 
 function getNames(results) {
@@ -154,7 +155,7 @@ function selectEpisode(anime, episode) {
   }
 
   if (episodeResults.error) {
-    showMessage('Error:' + animeResults.error);
+    showMessage('Error: ' + animeResults.error);
     return;
   }
 
@@ -181,20 +182,20 @@ function selectEpisode(anime, episode) {
   });
 }
 
-function onAnimeSelected(anime, currentAnime) {
-  if (currentAnime && currentAnime.episode) {
-    selectEpisode(anime, currentAnime.episode);
-  } else {
+function onAnimeSelected(anime) {
+  if (PROMPT_EPISODE) {
     inputGet({
       prompt: 'Episode (leave blank for all): ',
       submit: function (episode) {
         selectEpisode(anime, episode);
       },
     });
+  } else {
+    selectEpisode(anime);
   }
 }
 
-function search(searchTerm, currentAnime) {
+function search(searchTerm) {
   mp.input.terminate();
   showMessage('Searching for: "' + searchTerm + '"');
 
@@ -205,7 +206,7 @@ function search(searchTerm, currentAnime) {
   );
 
   if (animeResults.error) {
-    showMessage('Error:' + animeResults.error);
+    showMessage('Error: ' + animeResults.error);
     return;
   }
 
@@ -216,7 +217,7 @@ function search(searchTerm, currentAnime) {
 
   if (animeResults.length === 1) {
     var selectedAnime = animeResults[0];
-    onAnimeSelected(selectedAnime, currentAnime);
+    onAnimeSelected(selectedAnime);
     return;
   }
 
@@ -228,7 +229,7 @@ function search(searchTerm, currentAnime) {
     submit: function (id) {
       var selectedAnime = animeResults[id - 1];
       showMessage(selectedAnime.name, true);
-      onAnimeSelected(selectedAnime, currentAnime);
+      onAnimeSelected(selectedAnime);
     },
   });
 }
@@ -247,12 +248,11 @@ function manualSearch(defaultText) {
 function autoSearch() {
   var filename = mp.get_property('filename');
   var sanitizedFilename = sanitize(filename);
-  var currentAnime = extractTitleAndNumber(sanitizedFilename);
+  var currentAnime = extractTitle(sanitizedFilename);
 
   mp.set_property('pause', 'yes');
-  showMessage('Auto Jimaku Search');
 
-  search(currentAnime.title, currentAnime);
+  search(currentAnime);
 }
 
 mp.add_key_binding(MANUAL_SEARCH_KEY, 'jimaku-manual-search', manualSearch);

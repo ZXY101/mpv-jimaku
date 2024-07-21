@@ -1,6 +1,6 @@
 {
   "name": "mpv-jimaku",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Simple mpv script to download subs from Jimaku",
   "main": "jimaku.js",
   "repository": {
