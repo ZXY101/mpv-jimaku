@@ -1,6 +1,8 @@
 # mpv-jimaku
 **Simple [mpv](https://mpv.io/) script to download subs from [Jimaku](https://jimaku.cc/).**
 
+https://github.com/user-attachments/assets/505033db-f307-40b9-b4cc-111960984899
+
 Inspired by [mpv-subversive](https://github.com/nairyosangha/mpv-subversive) - if you have the means please use that instead, it has alot more features and is just better all round.
 This script is simply a stripped down and easier to install imitation of `mpv-subversive`.
 
