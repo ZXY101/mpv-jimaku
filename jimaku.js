@@ -10,17 +10,6 @@ var PROMPT_EPISODE = true;
 var MANUAL_SEARCH_KEY = 'g';
 var FILENAME_AUTO_SEARCH_KEY = 'h';
 var PARENT_FOLDER_AUTO_SEARCH_KEY = 'n';
-var NEXT_PAGE_KEY = '0';
-var PREV_PAGE_KEY = '9';
-var CANCEL_KEY = 'c';
-
-// Globals for internal use (do not change)
-var PAGE_LENGTH = 8;
-var options = [];
-var step = 1;
-var page = 0;
-var selectedAnime = {};
-var currentAnime = '';
 
 function api(url, extraArgs) {
   var baseArgs = [
@@ -64,6 +53,14 @@ function inputGet(args) {
   mp.input.terminate();
   setTimeout(function () {
     mp.input.get(args);
+  }, 1);
+}
+
+// The timeout is neccessary due to a weird bug in mpv
+function inputSelect(args) {
+  mp.input.terminate();
+  setTimeout(function () {
+    mp.input.select(args);
   }, 1);
 }
 
@@ -125,188 +122,141 @@ function extractTitle(text) {
   return text;
 }
 
-function showResults(results) {
-  var message = 'Results:\n';
-
-  options = [];
-
-  if (results.error) {
-    showMessage('Error: ' + results.error);
-    return;
-  }
-
-  if (results.length === 0) {
-    showMessage('No results found');
-    if (currentAnime) {
-      inputGet({
-        prompt: 'Search term: ',
-        submit: search,
-        default_text: currentAnime,
-      });
-    }
-    return;
-  }
-  var trueIndex = page * PAGE_LENGTH;
-  var j = 0;
-
-  for (var i = trueIndex; i < trueIndex + PAGE_LENGTH; i++) {
-    if (results[i]) {
-      var item = j + 1;
-      message += '[' + item + ']' + ' - ' + results[i].name + '\n';
-      options.push(results[i]);
-
-      mp.add_key_binding(
-        item,
-        'jimaku-' + item,
-        step === 1 ? onSelectAnime : selectSub,
-        {
-          complex: true,
-        }
-      );
-    }
-    j++;
-  }
-
-  message += '\n';
-
-  if (page > 0) {
-    mp.add_key_binding(PREV_PAGE_KEY, 'jimaku-' + PREV_PAGE_KEY, function () {
-      clearOptions();
-      page--;
-      showResults(results);
-    });
-    message += '\n[' + PREV_PAGE_KEY + '] - Prev page';
-  } else {
-    mp.remove_key_binding('jimaku-' + PREV_PAGE_KEY);
-  }
-
-  if (results.length > page * PAGE_LENGTH + options.length) {
-    mp.add_key_binding(NEXT_PAGE_KEY, 'jimaku-' + NEXT_PAGE_KEY, function () {
-      clearOptions();
-      page++;
-      showResults(results);
-    });
-    message += '\n[' + NEXT_PAGE_KEY + '] - Next page';
-  } else {
-    mp.remove_key_binding('jimaku-' + NEXT_PAGE_KEY);
-  }
-
-  message += '\n[' + CANCEL_KEY + '] - Cancel';
-  mp.add_key_binding(CANCEL_KEY, 'jimaku-' + CANCEL_KEY, cancel);
-
-  showMessage(message, true);
-}
-
-function selectEpisode(episode) {
-  mp.input.terminate();
-
-  var res;
-
-  if (episode) {
-    showMessage(
-      'Fetching subs for: ' + selectedAnime.name + ' episode ' + episode
-    );
-    res = api(
-      'https://jimaku.cc/api/entries/' +
-        selectedAnime.id +
-        '/files?episode=' +
-        episode
-    );
-  } else {
-    showMessage('Fetching all subs for: ' + selectedAnime.name);
-    res = api('https://jimaku.cc/api/entries/' + selectedAnime.id + '/files');
-  }
-
-  step = 2;
-  showResults(res);
-}
-
-function onSelectAnime(event) {
-  selectedAnime = {};
-
-  if (event.event === 'up') {
-    selectAnime(options[event.key_name - 1]);
-  }
-}
-
-function selectAnime(anime) {
-  page = 0;
-  selectedAnime = anime;
-  showMessage(selectedAnime.name + '\n\nEpisode: ', true);
-  clearOptions();
-
-  inputGet({
-    prompt: 'Episode (leave blank for all): ',
-    submit: selectEpisode,
+function getNames(results) {
+  return results.map(function (item) {
+    return item.name;
   });
 }
 
-function selectSub(event) {
-  if (event.event === 'up') {
-    page = 0;
-    var selectedSub = options[event.key_name - 1];
-    showMessage('Downloading: ' + selectedSub.name, true);
-    clearOptions();
-    downloadSub(selectedSub);
+function selectSub(selectedSub) {
+  showMessage('Downloading: ' + selectedSub.name);
+  downloadSub(selectedSub);
 
-    showMessage(selectedSub.name + ' downloaded');
+  showMessage(selectedSub.name + ' downloaded');
+  mp.commandv('sub_add', selectedSub.name);
 
-    mp.commandv('sub_add', selectedSub.name);
-    showMessage(selectedSub.name + ' added');
-    mp.set_property('pause', 'no');
-  }
+  showMessage(selectedSub.name + ' added');
+  mp.set_property('pause', 'no');
 }
 
-function clearOptions() {
-  mp.remove_key_binding('jimaku-' + CANCEL_KEY);
-  mp.remove_key_binding('jimaku-' + PREV_PAGE_KEY);
-  mp.remove_key_binding('jimaku-' + NEXT_PAGE_KEY);
-  for (var i = 0; i < options.length; i++) {
-    mp.remove_key_binding('jimaku-' + (i + 1));
-  }
-}
-
-function cancel() {
-  clearOptions();
-  page = 0;
-  step = 1;
-  showMessage('');
-}
-
-function search(searchTerm) {
+function selectEpisode(anime, episode) {
   mp.input.terminate();
-  step = 1;
+  var episodeResults;
 
-  showMessage('Searching for: "' + searchTerm + '"', true);
+  if (episode) {
+    showMessage('Fetching subs for: ' + anime.name + ' episode ' + episode);
+    episodeResults = api(
+      'https://jimaku.cc/api/entries/' + anime.id + '/files?episode=' + episode
+    );
+  } else {
+    showMessage('Fetching all subs for: ' + anime.name);
+    episodeResults = api(
+      'https://jimaku.cc/api/entries/' + anime.id + '/files'
+    );
+  }
 
-  var res = api(
+  if (episodeResults.error) {
+    showMessage('Error: ' + animeResults.error);
+    return;
+  }
+
+  if (episodeResults.length === 0) {
+    showMessage('No results found');
+    return;
+  }
+
+  if (episodeResults.length === 1) {
+    var selectedEpisode = episodeResults[0];
+    selectSub(selectedEpisode);
+    return;
+  }
+
+  var items = getNames(episodeResults);
+
+  inputSelect({
+    prompt: 'Select episode: ',
+    items: items,
+    submit: function (id) {
+      var selectedEpisode = episodeResults[id - 1];
+      selectSub(selectedEpisode);
+    },
+  });
+}
+
+function onAnimeSelected(anime) {
+  if (PROMPT_EPISODE) {
+    inputGet({
+      prompt: 'Episode (leave blank for all): ',
+      submit: function (episode) {
+        selectEpisode(anime, episode);
+      },
+    });
+  } else {
+    selectEpisode(anime);
+  }
+}
+
+function search(searchTerm, isAuto) {
+  mp.input.terminate();
+  showMessage('Searching for: "' + searchTerm + '"');
+
+  var animeResults = api(
     encodeURI(
       'https://jimaku.cc/api/entries/search?anime=true&query=' + searchTerm
     )
   );
 
-  if (res.length === 1) {
-    selectAnime(res[0]);
+  if (animeResults.error) {
+    showMessage('Error: ' + animeResults.error);
     return;
   }
 
-  showResults(res);
+  if (animeResults.length === 0) {
+    showMessage('No results found');
+    if (isAuto) {
+      manualSearch(searchTerm);
+    }
+    return;
+  }
+
+  if (animeResults.length === 1) {
+    var selectedAnime = animeResults[0];
+    onAnimeSelected(selectedAnime);
+    return;
+  }
+
+  var items = getNames(animeResults);
+
+  inputSelect({
+    prompt: 'Select anime: ',
+    items: items,
+    submit: function (id) {
+      var selectedAnime = animeResults[id - 1];
+      showMessage(selectedAnime.name, true);
+      onAnimeSelected(selectedAnime);
+    },
+  });
 }
 
-function manualSearch() {
-  showMessage('Manual Jimaku Search', true);
+function manualSearch(defaultText) {
+  inputGet({
+    prompt: 'Search term: ',
+    submit: search,
+    default_text: defaultText,
+  });
+
   mp.set_property('pause', 'yes');
-  inputGet({ prompt: 'Search term: ', submit: search });
+  showMessage('Manual Jimaku Search', true);
 }
 
 function autoSearch() {
   var filename = mp.get_property('filename');
   var sanitizedFilename = sanitize(filename);
-  currentAnime = extractTitle(sanitizedFilename);
+  var currentAnime = extractTitle(sanitizedFilename);
 
   mp.set_property('pause', 'yes');
 
-  search(currentAnime);
+  search(currentAnime, true);
 }
 
 function autoSearchParentFolder() {
@@ -316,11 +266,11 @@ function autoSearchParentFolder() {
     pathSplit.length === 1 ? pathSplit[0] : pathSplit[pathSplit.length - 2];
 
   var sanitizedFilename = sanitize(filename);
-  currentAnime = extractTitle(sanitizedFilename);
+  var currentAnime = extractTitle(sanitizedFilename);
 
   mp.set_property('pause', 'yes');
 
-  search(currentAnime);
+  search(currentAnime, true);
 }
 
 mp.add_key_binding(MANUAL_SEARCH_KEY, 'jimaku-manual-search', manualSearch);
